@@ -1,6 +1,11 @@
-﻿namespace _01_Agenda.Error.Common;
+﻿using _01_Agenda.Models.Enum;
+
+namespace _01_Agenda.Error.Common;
 
 /// <summary>
-/// Clase base abstracta para todos los errores del dominio académico.
+/// Base de TODOS los errores del dominio de la agenda.
+/// Lleva mensaje + código HTTP. Gracias a esto, el Result ya sabe qué "status"
+/// devolver sin necesidad de una clase ApiResponse aparte.
+/// Cualquier error nuevo debe pasar estos dos datos al constructor.
 /// </summary>
-public abstract record DomainError(string Message);
+public abstract record DomainError(string Message, HttpCodes Code);

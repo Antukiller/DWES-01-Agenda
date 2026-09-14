@@ -1,11 +1,11 @@
-using _01_Agenda.Entity;
+using _01_Agenda.Models;
 using Microsoft.EntityFrameworkCore;
 
 
 // ─── DB CONTEXT ───
 
 /// <summary>
-/// Contexto de base de datos para la aplicación de gestión ITV.
+/// Contexto de base de datos para la aplicación de agenda de contactos.
 /// </summary>
 public class AppDbContext : DbContext {
     private readonly string? _connectionString;
@@ -26,9 +26,9 @@ public class AppDbContext : DbContext {
     }
 
     /// <summary>
-    /// Conjunto de entidades de tipo cita.
+    /// Conjunto de entidades de tipo contacto.
     /// </summary>
-    public DbSet<ContactoEntity> Citas { get; set; } = null!;
+    public DbSet<Contacto> Contacto { get; set; } = null!;
 
     /// <summary>
     /// Configura el contexto si no viene ya configurado desde el ServiceCollection.

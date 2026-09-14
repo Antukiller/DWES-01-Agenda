@@ -1,57 +1,55 @@
 ﻿using _01_Agenda.Error.Common;
+using _01_Agenda.Models.Enum;
 
-namespace _01_Agenda.Error.Cita;
+namespace _01_Agenda.Error.Contacto;
 
 
 /// <summary>
-/// Contenedor de errores específicos para el dominio de Vehículos.
+/// Contenedor de errores específicos del dominio de Contactos.
+/// Cada error concreto hereda de este y solo aporta su mensaje y su código HTTP.
 /// </summary>
-public abstract record ContactoError(string Message) : DomainError(Message) {
+public abstract record ContactoError(string Message, HttpCodes Code) : DomainError(Message, Code) {
 
-    /// <summary>Error: cita no encontrada por ID.</summary>
+    /// <summary>Error: contacto no encontrado por ID. → 404</summary>
     public sealed record NotFound(string Id)
-        : ContactoError($"No se encontró la cita con ID {Id}");
-    
+        : ContactoError($"No se encontró el contacto con ID {Id}", HttpCodes.NotFound);
 
-    /// <summary>Error: ya existe una cita programada con esa matrícula para esa fecha.</summary>
+
+    /// <summary>Error: ya existe un contacto con ese alias. → 409</summary>
     public sealed record AliasAlreadyExists(string Alias)
-        : ContactoError($"La matrícula {Alias} ya tiene programada una cita para esa fecha.");
+        : ContactoError($"Ya existe un contacto con el alias {Alias}.", HttpCodes.Conflict);
 
-    /// <summary>Error: el DNI del propietario ya está registrado.</summary>
+    /// <summary>Error: el teléfono ya está registrado en otro contacto. → 409</summary>
     public sealed record TelefonoAlreadyExists(string Telefono)
-        : ContactoError(
-            $"Conflicto de integridad: El DNI del propietario {Telefono} ya está registrado en el sistema.");
+        : ContactoError($"Ya existe un contacto con el teléfono {Telefono}.", HttpCodes.Conflict);
 
-    /// <summary>Error de base de datos.</summary>
+    /// <summary>Error de base de datos. → 500</summary>
     public sealed record Database(string Details)
-        : ContactoError($"Error de base de datos: {Details}");
-    
+        : ContactoError($"Error de base de datos: {Details}", HttpCodes.InternalServerError);
 }
 
 /// <summary>
-/// Factory para crear errores de dominio de Vehículo.
+/// Factory para crear errores de dominio de Contacto.
+/// Te ahorra acordarte del nombre de cada record: llamas a ContactoErrors.Xyz().
 /// </summary>
-public static class CitaErrors {
+public static class ContactoErrors {
 
-    /// <summary>Crea un error de cita no encontrada.</summary>
+    /// <summary>Crea un error de contacto no encontrado.</summary>
     public static DomainError NotFound(string id) {
         return new ContactoError.NotFound(id);
     }
-    
 
-    /// <summary>Crea un error de matrícula duplicada.</summary>
+    /// <summary>Crea un error de alias duplicado.</summary>
     public static DomainError AliasAlreadyExists(string alias) {
         return new ContactoError.AliasAlreadyExists(alias);
     }
 
-    /// <summary>Crea un error de DNI de propietario duplicado.</summary>
-    public static DomainError TelefonoAlreadyExists(string Telefono) {
-        return new ContactoError.TelefonoAlreadyExists(Telefono);
+    /// <summary>Crea un error de teléfono duplicado.</summary>
+    public static DomainError TelefonoAlreadyExists(string telefono) {
+        return new ContactoError.TelefonoAlreadyExists(telefono);
     }
-    
-    
 
-    /// <summary>Crea un error de base de datos.</summary>
+    /// <summary>Crea un error de la base de datos.</summary>
     public static DomainError DatabaseError(string details) {
         return new ContactoError.Database(details);
     }
