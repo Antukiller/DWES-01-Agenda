@@ -27,8 +27,4 @@
       <ProjectReference Include="..\01-Agenda\01-Agenda.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Repositories\" />
-    </ItemGroup>
-
 </Project>
