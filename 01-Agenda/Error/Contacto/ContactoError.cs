@@ -10,6 +10,10 @@ namespace _01_Agenda.Error.Contacto;
 /// </summary>
 public abstract record ContactoError(string Message, HttpCodes Code) : DomainError(Message, Code) {
 
+    /// <summary>Error: datos obligatorios vacíos (Nombre o Teléfono). → 400</summary>
+    public sealed record Validation(string Details)
+        : ContactoError($"Datos obligatorios vacíos: {Details}", HttpCodes.BadRequest);
+
     /// <summary>Error: contacto no encontrado por ID. → 404</summary>
     public sealed record NotFound(string Id)
         : ContactoError($"No se encontró el contacto con ID {Id}", HttpCodes.NotFound);
