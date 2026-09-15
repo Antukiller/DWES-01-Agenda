@@ -1,0 +1,27 @@
+﻿services:
+  01-agenda:
+    image: 01-agenda
+    build:
+      context: .
+      dockerfile: 01-Agenda/Dockerfile
+      target: final
+    restart: always
+    networks:
+      - webtest
+
+  01-agenda.test:
+    image: 01-agenda.test
+    build:
+      context: .
+      dockerfile: 01-Agenda.Test/Dockerfile
+      target: testweb
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - webtest
+
+networks:
+  webtest:
+    driver: bridge

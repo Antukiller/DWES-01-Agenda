@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="compose.yaml" />
+  </Folder>
   <Project Path="01-Agenda.Test/01-Agenda.Test.csproj" />
   <Project Path="01-Agenda/01-Agenda.csproj" />
 </Solution>
