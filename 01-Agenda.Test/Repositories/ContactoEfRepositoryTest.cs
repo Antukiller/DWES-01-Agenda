@@ -89,8 +89,8 @@ public class ContactoEfRepositoryTests {
             var r = _repository.GetById(1);
 
             // Assert
-            r.Should().NotBeNull();
-            r!.Id.Should().Be(1);
+            r.IsSuccess.Should().BeTrue();
+            r.Value!.Id.Should().Be(1);
         }
 
         /// <summary>
@@ -308,7 +308,8 @@ public class ContactoEfRepositoryTests {
             var r = _repository.GetById(999);
 
             // Assert
-            r.Should().BeNull();
+            r.IsFailure.Should().BeTrue();
+            r.Error.Should().BeOfType<ContactoError.NotFound>();
         }
 
         /// <summary>
@@ -458,7 +459,7 @@ public class ContactoEfRepositoryTests {
             _repository.Delete(creado.Id, isLogical: false);
 
             // Assert
-            _repository.GetById(creado.Id).Should().BeNull();
+            _repository.GetById(creado.Id).IsFailure.Should().BeTrue();
         }
 
         /// <summary>
@@ -581,7 +582,8 @@ public class ContactoEfRepositoryTests {
             var r = _repository.GetById(1);
 
             // Assert
-            r.Should().BeNull();
+            r.IsFailure.Should().BeTrue();
+            r.Error.Should().BeOfType<ContactoError.Database>();
         }
 
         /// <summary>

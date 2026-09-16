@@ -254,7 +254,11 @@ public class AgendaServicesTest {
         public void GetById_ConContactoNoExistente_RetornarErrorNotFound() {
             // Arrange
             _cacheMock.Setup(c => c.Get(999)).Returns((Contacto?)null);
-            _repositoryMock.Setup(r => r.GetById(999)).Returns((Contacto?)null);
+    
+            // Configurar el mock para que devuelva un Result.Failure con ContactoError.NotFound
+            _repositoryMock
+                .Setup(r => r.GetById(999))
+                .Returns(Result.Failure<Contacto, DomainError>(new ContactoError.NotFound("999")));
 
             // Act
             var r = _service.GetById(999);
@@ -263,11 +267,12 @@ public class AgendaServicesTest {
             r.IsFailure.Should().BeTrue();
             r.Error.Should().BeOfType<ContactoError.NotFound>();
             r.Error.Message.Should().Contain("999");
+    
             _cacheMock.Verify(c => c.Get(999), Times.Once);
             _repositoryMock.Verify(r => r.GetById(999), Times.Once);
             _cacheMock.Verify(c => c.Add(It.IsAny<int>(), It.IsAny<Contacto>()), Times.Never);
         }
-
+        
         /// <summary>
         /// GetByAlias de un alias inexistente debería devolver NotFound.
         /// </summary>
