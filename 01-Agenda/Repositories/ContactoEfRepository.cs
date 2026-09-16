@@ -1,5 +1,6 @@
 ﻿using _01_Agenda.Error.Common;
 using _01_Agenda.Error.Contacto;
+using _01_Agenda.Mapper;
 using _01_Agenda.Models;
 using _01_Agenda.Repositories.Base;
 using CSharpFunctionalExtensions;
@@ -16,8 +17,10 @@ public class ContactoEfRepository : ICrudRepository {
     private readonly AppDbContext _context;  // el contexto = la "sesión" de conexión a la BD
     private readonly ILogger _logger = Log.ForContext<ContactoEfRepository>(); // logs de Serilog
 
-    public ContactoEfRepository(AppDbContext context) {
+    public ContactoEfRepository(AppDbContext context, bool dropData = false) {
         _context = context;
+        if (dropData) _context.Database.EnsureDeleted();
+        _context.Database.EnsureCreated();
     }
 
     /// <summary>
@@ -27,51 +30,60 @@ public class ContactoEfRepository : ICrudRepository {
     /// .AsNoTracking(): EF no vigila las entidades → más rápido y menos memoria. Ideal en lecturas.
     /// </summary>
     public IEnumerable<Contacto> GetAll(int pagina, int tamPagina, bool isDeleteInclude) {
-        IQueryable<Contacto> consulta = _context.Contacto.AsNoTracking();
-
-        // Por defecto excluye los borrados lógicos, salvo que pida incluirlos.
-        if (!isDeleteInclude)
-            consulta = consulta.Where(c => !c.IsDeleted);
-
-        // Ordena y pagina ANTES de materializar → se convierte en SQL (ORDER BY + OFFSET/LIMIT).
-        return consulta
-            .OrderBy(c => c.Id)
-            .Skip((pagina - 1) * tamPagina)
-            .Take(tamPagina)
-            .ToList();
+        _logger.Debug("Obteniendo todos los contactos");
+        try {
+            var query = _context.Contacto.AsNoTracking();
+            var entities = query
+                .OrderBy(i => i.Id)
+                .Skip((pagina - 1) * tamPagina)
+                .Take(tamPagina)
+                .ToList();
+            _logger.Debug("Se han obtenido {Count} contactos exitosamente", entities.Count);
+            return entities.Select(i => i.ToModel());
+        }
+        catch (Exception e) {
+            _logger.Error(e, "Error, no se pudieron obtener los contactos");
+            return Enumerable.Empty<Contacto>();
+        }
     }
 
     // GET por id → devuelve el contacto o null (el servicio decide el 404).
     public Contacto? GetById(int id) {
         try {
-            return _context.Contacto.AsNoTracking().FirstOrDefault(c => c.Id == id);
+            _logger.Debug("Obteniendo contacto con id: {Id}", id);
+            var contacto = _context.Contacto.FirstOrDefault(i => i.Id == id)?.ToModel();
+            if (contacto is null)
+                return Result.Failure<Contacto, DomainError>(ContactoErrors.NotFound(id.ToString()));
+            return Result.Success<Contacto, DomainError>(contacto);
         }
-        catch (Exception ex) {
-            _logger.Error(ex, "Error al obtener el contacto por ID {Id}", id);
-            return null;
+        catch (Exception e) {
+            _logger.Error(e, "Error, no se encontro al contacto con ID: {Id}", id);
+            return Result.Failure<Contacto, DomainError>(ContactoErrors.DatabaseError(e.Message));
         }
     }
 
     // POST → crear. Primero valida la regla de negocio: teléfono no duplicado.
     public Result<Contacto, DomainError> Create(Contacto contacto) {
+        _logger.Debug("Creando contacto...");
+        var exist = ExistsTelefono(contacto.Telefono);
+        if (exist)
+            return Result.Failure<Contacto, DomainError>(ContactoErrors.TelefonoAlreadyExists(contacto.Telefono));
+        contacto = contacto with {
+            Id = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
         try {
-            // REGLA DE NEGOCIO: no se puede guardar un teléfono ya usado por otro contacto.
-            var telefonoDuplicado = _context.Contacto.Any(c => c.Telefono == contacto.Telefono && !c.IsDeleted);
-            if (telefonoDuplicado)
-                return Result.Failure<Contacto, DomainError>(ContactoErrors.TelefonoAlreadyExists(contacto.Telefono));
-
-            contacto.CreatedAt = DateTime.Now;   // marca temporal de creación
-            contacto.UpdatedAt = DateTime.Now;
-
-            _context.Contacto.Add(contacto);      // lo marca como "nuevo" en el contexto
-            _context.SaveChanges();               // lo inserta; aquí la BD asigna el Id
-
-            _logger.Debug("Contacto creado en DB con ID {Id}", contacto.Id);
-            return Result.Success<Contacto, DomainError>(contacto);
+            var entity = contacto.ToEntity();
+            _context.Contacto.Add(entity);
+            _context.SaveChanges();
+            _logger.Debug("Contacto creado correctamente");
+            return Result.Success<Contacto, DomainError>(entity.ToModel());
         }
-        catch (Exception ex) {
-            _logger.Error(ex, "Error al crear el contacto en EF Core");
-            return Result.Failure<Contacto, DomainError>(ContactoErrors.DatabaseError(ex.Message));
+        catch (Exception e) {
+            _logger.Error(e, "Error, no se pudo crear al contacto que introducistes");
+            return Result.Failure<Contacto, DomainError>(ContactoErrors.DatabaseError(e.Message));
         }
     }
 

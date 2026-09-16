@@ -1,4 +1,5 @@
-﻿using _01_Agenda.Cache;
+﻿using System.Runtime;
+using _01_Agenda.Cache;
 using _01_Agenda.Error.Common;
 using _01_Agenda.Error.Contacto;
 using _01_Agenda.Models;
@@ -28,15 +29,9 @@ public class AgendaServices(ICrudRepository repository, ICache<int, Contacto> ca
     //    (así la próxima vez el mismo id saldrá sin consultar).
     // 3ª si tampoco está en la BD → error NotFound (su Code es 404).
     public Result<Contacto, DomainError> GetById(int id) {
-        if (cache.Get(id) is { } cacheado)
-            return Result.Success<Contacto, DomainError>(cacheado);
-
-        if (repository.GetById(id) is { } contacto) {
-            cache.Add(id, contacto);
-            return Result.Success<Contacto, DomainError>(contacto);
-        }
-
-        return Result.Failure<Contacto, DomainError>(ContactoErrors.NotFound(id.ToString()));
+        if (cache.Get(id) is  { } cached) return Result.Success<Contacto, DomainError>(cached);
+        return repository.GetById(id);
+            .Tap(c => cache.Add(id, c));
     }
 
     // GET /contactos/alias/{alias} → igual que GetById pero buscando por alias.
