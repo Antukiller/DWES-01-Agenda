@@ -1,3 +1,4 @@
+using _01_Agenda.Entity;
 using _01_Agenda.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,7 +29,7 @@ public class AppDbContext : DbContext {
     /// <summary>
     /// Conjunto de entidades de tipo contacto.
     /// </summary>
-    public DbSet<Contacto> Contacto { get; set; } = null!;
+    public DbSet<ContactoEntity> Contacto { get; set; } = null!;
 
     /// <summary>
     /// Configura el contexto si no viene ya configurado desde el ServiceCollection.

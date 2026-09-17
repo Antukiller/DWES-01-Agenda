@@ -15,7 +15,7 @@ public interface ICrudRepository {
     IEnumerable<Contacto> GetAll(int pagina, int tamPagina, bool isDeleteInclude);
 
     // GET /contactos/{id} → un contacto, o null si no existe.
-    Contacto? GetById(int id);
+    Result<Contacto, DomainError> GetById(int id);
 
     // POST /contactos → crea. Éxito: Result con el contacto (Id ya asignado por la BD).
     // Teléfono duplicado: error 409.

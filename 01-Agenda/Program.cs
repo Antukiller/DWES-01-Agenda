@@ -1,94 +1,87 @@
-﻿using _01_Agenda.Cache;
-using _01_Agenda.Error.Common;
+﻿using System;
+using System.Text.Json;
+using _01_Agenda.Controller;
+using _01_Agenda.Dto;
+using _01_Agenda.Infrastructure;
 using _01_Agenda.Models;
 using _01_Agenda.Models.Enum;
-using _01_Agenda.Repositories;
-using _01_Agenda.Services;
-using CSharpFunctionalExtensions;
+using Microsoft.Extensions.DependencyInjection;
 
-// ─── CONFIGURACIÓN ─────────────────────────────────────────────
-// BD SQLite (se crea el fichero agenda.db en la carpeta de la app)
-var db = new AppDbContext("Data Source=agenda.db");
-db.EnsureCreated(); // crea BD y tablas si no existen
+// ─── CONFIGURACIÓN VÍA DEPENDENCIESPROVIDER ────────────────────
+var serviceProvider = DependenciesProvider.BuildServiceProvider();
 
-var cache = new LruCache<int, Contacto>(10);   // caché LRU con capacidad 10
-IAgendaServices service = new AgendaServices(
-    new ContactoEfRepository(db), cache);      // el servicio se monta sobre repo + caché
+// Resolvemos el DbContext para asegurar la creación de la BD
+using (var scope = serviceProvider.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.EnsureCreated();
+}
 
-// Helper: convierte un HttpVerb en el texto del verbo HTTP (capa de "rutas").
-// Es un switch: añadir un verbo nuevo = añadir un case. Así "se cambia" fácil.
+// Resolvemos el controlador (DI inyecta automáticamente el servicio, repo y caché)
+var contactos = serviceProvider.GetRequiredService<ContactoController>();
+
+// ─── HELPERS ───────────────────────────────────────────────────
+void Mostrar(HttpVerb verbo, ResponseDto resp) {
+    Console.WriteLine($"[{Verbo(verbo)} {(int)resp.Codigo} {resp.Codigo}] {resp.Contenido}");
+}
+
+void Dispatch(HttpVerb verbo, string cuerpo) {
+    Mostrar(verbo, contactos.Dispatch(new ResquestDto(verbo, cuerpo)));
+}
+
 string Verbo(HttpVerb v) => v switch {
     HttpVerb.Post   => "POST",
     HttpVerb.Get    => "GET",
     HttpVerb.Put    => "PUT",
     HttpVerb.Delete => "DELETE",
-    _               => "?"   // por si algún día metes un verbo nuevo sin ponerle case
+    _               => "?"
 };
-
-// Helper: pinta una respuesta Result como si fuera un log de servidor.
-// codeOk es el código HTTP "esperado" en caso de ÉXITO (Created para POST, Ok para el resto).
-void Mostrar(HttpVerb verbo, HttpCodes codeOk, Result<Contacto, DomainError> r) {
-    if (r.IsSuccess) {
-        var c = r.Value;
-        Console.WriteLine($"[{Verbo(verbo)} {(int)codeOk} {codeOk}] {c.Id} | {c.Nombre} | {c.Alias} | {c.Telefono}");
-    }
-    else {
-        Console.WriteLine($"[{Verbo(verbo)} {(int)r.Error.Code} {r.Error.Code}] {r.Error.Message}");
-    }
-}
 
 // ─── POST /contactos  (crear) ──────────────────────────────────
 Console.WriteLine("\n== POST /contactos ==");
-Mostrar(HttpVerb.Post, HttpCodes.Created, service.Save(new Contacto {
+Dispatch(HttpVerb.Post, JsonSerializer.Serialize(new Contacto {
     Nombre = "Ana García", Telefono = "600111222", Email = "ana@mail.com", Alias = "anni" }));
-Mostrar(HttpVerb.Post, HttpCodes.Created, service.Save(new Contacto {
+Dispatch(HttpVerb.Post, JsonSerializer.Serialize(new Contacto {
     Nombre = "Luis Pérez", Telefono = "600111333", Email = "luis@mail.com", Alias = "lucho" }));
-Mostrar(HttpVerb.Post, HttpCodes.Created, service.Save(new Contacto {
+Dispatch(HttpVerb.Post, JsonSerializer.Serialize(new Contacto {
     Nombre = "Marta Ruiz", Telefono = "600111444", Email = "marta@mail.com", Alias = "marti" }));
 
-// Caso negativo: teléfono duplicado → 409 Conflict (regla del repositorio)
-Mostrar(HttpVerb.Post, HttpCodes.Created, service.Save(new Contacto {
-    Nombre = "Clon", Telefono = "600111222", Email = "clon@mail.com", Alias = "clon" }));
+Console.WriteLine("\n== POST /contactos (duplicado) ==");
+Dispatch(HttpVerb.Post, JsonSerializer.Serialize(new Contacto {
+    Nombre = "Clon", Telefono = "600111222", Email = "clon@mail.com", Alias = "clon" })); // 409
 
 // ─── GET /contactos/{id}  (leer uno) ───────────────────────────
 Console.WriteLine("\n== GET /contactos/{id} ==");
-Mostrar(HttpVerb.Get, HttpCodes.Ok, service.GetById(1));   // 1ª vez: no está en caché → consulta BD y la rellena
-Mostrar(HttpVerb.Get, HttpCodes.Ok, service.GetById(1));   // 2ª vez: sale de la CACHÉ (mismo resultado, sin tocar BD)
-Mostrar(HttpVerb.Get, HttpCodes.Ok, service.GetById(999)); // no existe → 404 NotFound
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize(1));          // existe → 200
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize(1));          // caché → 200
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize(999));        // no existe → 404
 
-// ─── GET /contactos/alias/{alias} ─────────────────────────────
-Console.WriteLine("\n== GET /contactos/alias/{alias} ==");
-Mostrar(HttpVerb.Get, HttpCodes.Ok, service.GetByAlias("lucho"));    // existe → 200
-Mostrar(HttpVerb.Get, HttpCodes.Ok, service.GetByAlias("noexiste")); // 404
+// ─── GET /contactos (Probando las distintas variantes) ───────────────
+Console.WriteLine("\n== 1. GET /contactos (Obtener TODOS) ==");
+Dispatch(HttpVerb.Get, "");                       // Cadena vacía → Devuelve la lista completa (200)
+// Dispatch(HttpVerb.Get, "{}");                  // O con "{}" → También devuelve todos (200)
 
-// ─── GET /contactos  (listar) ──────────────────────────────────
-Console.WriteLine("\n== GET /contactos (sin borrados) ==");
-foreach (var c in service.GetAll(includeDeleted: false))
-    Console.WriteLine($"  {c.Id} | {c.Nombre} | {c.Alias} | {c.Telefono}");
-Console.WriteLine($"  (TotalContacto: {service.TotalContacto})");
+Console.WriteLine("\n== 2. GET /contactos/{id} (Obtener por ID) ==");
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize(1)); // Int 1 → Devuelve el contacto 1 (200)
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize(999)); // Int 999 → Devuelve NotFound (404)
+
+Console.WriteLine("\n== 3. GET /contactos/alias/{alias} (Obtener por ALIAS) ==");
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize("anni")); // Cadena "anni" → Devuelve a Ana García (200)
+Dispatch(HttpVerb.Get, JsonSerializer.Serialize("no_existe")); // Alias inexistente → Devuelve NotFound (404)
 
 // ─── PUT /contactos/{id}  (actualizar) ─────────────────────────
 Console.WriteLine("\n== PUT /contactos/{id} ==");
-Mostrar(HttpVerb.Put, HttpCodes.Ok, service.Update(2, new Contacto {
-    Nombre = "Luis Pérez Vega", Telefono = "600111333", Email = "luisv@mail.com", Alias = "luigui" }));
-
-// Caso negativo: el contacto 3 toma el teléfono del 1 → 409
-Mostrar(HttpVerb.Put, HttpCodes.Ok, service.Update(3, new Contacto {
-    Nombre = "Marta Ruiz", Telefono = "600111222", Email = "marta@mail.com", Alias = "marti" }));
+Dispatch(HttpVerb.Put, JsonSerializer.Serialize(new Contacto {
+    Id = 2, Nombre = "Luis Pérez Vega", Telefono = "600111333", Email = "luisv@mail.com", Alias = "luigui" }));    // 200
+Dispatch(HttpVerb.Put, JsonSerializer.Serialize(new Contacto {
+    Id = 3, Nombre = "Marta Ruiz", Telefono = "600111222", Email = "marta@mail.com", Alias = "marti" }));           // 409 (teléfono del 1)
+Dispatch(HttpVerb.Put, JsonSerializer.Serialize(new Contacto {
+    Id = 999, Nombre = "X", Telefono = "699999999", Email = "x@mail.com", Alias = "x" }));                          // 404
 
 // ─── DELETE /contactos/{id}  (borrar) ──────────────────────────
 Console.WriteLine("\n== DELETE /contactos/{id} ==");
-Mostrar(HttpVerb.Delete, HttpCodes.Ok, service.Delete(3));   // borrado lógico (IsDeleted = true)
-Mostrar(HttpVerb.Delete, HttpCodes.Ok, service.Delete(999)); // no existe → 404
+Dispatch(HttpVerb.Delete, JsonSerializer.Serialize(3));        // borrado lógico → 200
+Dispatch(HttpVerb.Delete, JsonSerializer.Serialize(999));      // no existe → 404
 
-// ─── Capa de RUTAS: petición MAL FORMADA → 400 ─────────────────
-// Aquí sí se usa HttpCodes.BadRequest: la ruta llega SIN el {id} obligatorio
-// ("PUT /contactos/" en vez de "PUT /contactos/5"). Es un problema de la
-// RUTA, no del dominio: el servicio ni se entera. Por eso se rechaza en
-// la capa de rutas con 400, antes de intentar siquiera llamar al servicio.
-Console.WriteLine("\n== PUT /contactos/ (sin {id}) ==");
-string idSolicitado = "";                                     // el segmento {id} viene vacío
-if (string.IsNullOrWhiteSpace(idSolicitado))
-    Console.WriteLine($"[{Verbo(HttpVerb.Put)} {(int)HttpCodes.BadRequest} {HttpCodes.BadRequest}] falta el {{id}} en la ruta");
-else
-    Mostrar(HttpVerb.Put, HttpCodes.Ok, service.Update(int.Parse(idSolicitado), new Contacto()));
+// ─── Verbo desconocido → 400 ───────────────────────────────────
+Console.WriteLine("\n== PATCH (verbo no soportado) ==");
+Mostrar(HttpVerb.Get, contactos.Dispatch(new ResquestDto((HttpVerb)99, "{}"))); // → 400 BadRequest

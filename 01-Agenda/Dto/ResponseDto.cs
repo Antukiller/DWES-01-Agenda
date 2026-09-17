@@ -1,3 +1,5 @@
-﻿namespace _01_Agenda.Dto;
+﻿using _01_Agenda.Models.Enum;
 
-public record ResponseDto();
+namespace _01_Agenda.Dto;
+
+public record ResponseDto(HttpCodes Codigo, string Contenido);
